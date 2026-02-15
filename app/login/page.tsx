@@ -3,6 +3,7 @@
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -86,6 +87,12 @@ export default function LoginPage() {
               <p className="font-mono">demo@tresmigo.com / demo123</p>
             </div>
           </form>
+          <div className="mt-6 text-center text-sm">
+            Don't have an account?{" "}
+            <Link href="/signup" className="text-blue-600 hover:underline font-medium">
+              Sign up
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
