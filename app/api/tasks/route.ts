@@ -2,27 +2,41 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getUserWithPermissions, hasPermission, getDataFilter } from "@/lib/permissions";
 
 export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = await getUserWithPermissions(session.user.id);
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
     }
 
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search") || "";
-    const status = searchParams.get("status");
+    const statusFilter = searchParams.get("status");
+
+    // Get permission-based filter
+    const permissionFilter = await getDataFilter(user, 'tasks');
 
     const where: any = {
-      OR: [
-        { title: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
+      ...permissionFilter,
+      AND: [
+        {
+          OR: [
+            { title: { contains: search, mode: "insensitive" } },
+            { description: { contains: search, mode: "insensitive" } },
+          ],
+        },
       ],
     };
 
-    if (status) {
-      where.status = status;
+    if (statusFilter) {
+      where.AND.push({ status: statusFilter });
     }
 
     const tasks = await prisma.task.findMany({
@@ -30,6 +44,7 @@ export async function GET(req: Request) {
       include: {
         user: {
           select: {
+            id: true,
             name: true,
             email: true,
           },
@@ -48,8 +63,18 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = await getUserWithPermissions(session.user.id);
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
+    }
+
+    // Check permission
+    if (!hasPermission(user, 'tasks', 'create')) {
+      return new NextResponse("Forbidden", { status: 403 });
     }
 
     const body = await req.json();
@@ -66,7 +91,8 @@ export async function POST(req: Request) {
         status: status || "pending",
         priority: priority || "medium",
         dueDate: dueDate ? new Date(dueDate) : null,
-        assignedTo,
+        assignedTo: assignedTo || user.id,
+        organizationId: user.organizationId,
       },
     });
 
@@ -80,8 +106,18 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = await getUserWithPermissions(session.user.id);
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
+    }
+
+    // Check permission
+    if (!hasPermission(user, 'tasks', 'edit')) {
+      return new NextResponse("Forbidden", { status: 403 });
     }
 
     const body = await req.json();
@@ -92,7 +128,10 @@ export async function PUT(req: Request) {
     }
 
     const task = await prisma.task.update({
-      where: { id },
+      where: {
+        id,
+        organizationId: user.organizationId,
+      },
       data: {
         title,
         description,
@@ -113,8 +152,18 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = await getUserWithPermissions(session.user.id);
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
+    }
+
+    // Check permission
+    if (!hasPermission(user, 'tasks', 'delete')) {
+      return new NextResponse("Forbidden", { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);
@@ -125,7 +174,10 @@ export async function DELETE(req: Request) {
     }
 
     await prisma.task.delete({
-      where: { id },
+      where: {
+        id,
+        organizationId: user.organizationId,
+      },
     });
 
     return NextResponse.json({ success: true });
