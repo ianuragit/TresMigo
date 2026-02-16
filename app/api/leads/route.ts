@@ -2,28 +2,42 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getUserWithPermissions, hasPermission, getDataFilter } from "@/lib/permissions";
 
 export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = await getUserWithPermissions(session.user.id);
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
     }
 
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search") || "";
-    const status = searchParams.get("status");
+    const statusFilter = searchParams.get("status");
+
+    // Get permission-based filter
+    const permissionFilter = await getDataFilter(user, 'leads');
 
     const where: any = {
-      OR: [
-        { name: { contains: search, mode: "insensitive" } },
-        { email: { contains: search, mode: "insensitive" } },
-        { company: { contains: search, mode: "insensitive" } },
+      ...permissionFilter,
+      AND: [
+        {
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { email: { contains: search, mode: "insensitive" } },
+            { company: { contains: search, mode: "insensitive" } },
+          ],
+        },
       ],
     };
 
-    if (status) {
-      where.status = status;
+    if (statusFilter) {
+      where.AND.push({ status: statusFilter });
     }
 
     const leads = await prisma.lead.findMany({
@@ -31,6 +45,7 @@ export async function GET(req: Request) {
       include: {
         user: {
           select: {
+            id: true,
             name: true,
             email: true,
           },
@@ -49,8 +64,18 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = await getUserWithPermissions(session.user.id);
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
+    }
+
+    // Check permission
+    if (!hasPermission(user, 'leads', 'create')) {
+      return new NextResponse("Forbidden", { status: 403 });
     }
 
     const body = await req.json();
@@ -68,7 +93,8 @@ export async function POST(req: Request) {
         company,
         status: status || "new",
         source,
-        assignedTo,
+        assignedTo: assignedTo || user.id, // Assign to self if not specified
+        organizationId: user.organizationId,
       },
     });
 
@@ -82,8 +108,18 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = await getUserWithPermissions(session.user.id);
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
+    }
+
+    // Check permission
+    if (!hasPermission(user, 'leads', 'edit')) {
+      return new NextResponse("Forbidden", { status: 403 });
     }
 
     const body = await req.json();
@@ -94,7 +130,10 @@ export async function PUT(req: Request) {
     }
 
     const lead = await prisma.lead.update({
-      where: { id },
+      where: {
+        id,
+        organizationId: user.organizationId,
+      },
       data: {
         name,
         email,
@@ -116,8 +155,18 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = await getUserWithPermissions(session.user.id);
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
+    }
+
+    // Check permission
+    if (!hasPermission(user, 'leads', 'delete')) {
+      return new NextResponse("Forbidden", { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);
@@ -128,7 +177,10 @@ export async function DELETE(req: Request) {
     }
 
     await prisma.lead.delete({
-      where: { id },
+      where: {
+        id,
+        organizationId: user.organizationId,
+      },
     });
 
     return NextResponse.json({ success: true });

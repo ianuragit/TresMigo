@@ -2,12 +2,18 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getUserWithPermissions, hasPermission } from "@/lib/permissions";
 
 export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = await getUserWithPermissions(session.user.id);
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
     }
 
     const { searchParams } = new URL(req.url);
@@ -15,6 +21,7 @@ export async function GET(req: Request) {
 
     const customers = await prisma.customer.findMany({
       where: {
+        organizationId: user.organizationId,
         OR: [
           { name: { contains: search, mode: "insensitive" } },
           { email: { contains: search, mode: "insensitive" } },
@@ -34,8 +41,18 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = await getUserWithPermissions(session.user.id);
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
+    }
+
+    // Check permission
+    if (!hasPermission(user, 'customers', 'create')) {
+      return new NextResponse("Forbidden", { status: 403 });
     }
 
     const body = await req.json();
@@ -52,6 +69,7 @@ export async function POST(req: Request) {
         phone,
         company,
         status: status || "active",
+        organizationId: user.organizationId,
       },
     });
 
@@ -65,8 +83,18 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = await getUserWithPermissions(session.user.id);
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
+    }
+
+    // Check permission
+    if (!hasPermission(user, 'customers', 'edit')) {
+      return new NextResponse("Forbidden", { status: 403 });
     }
 
     const body = await req.json();
@@ -77,7 +105,10 @@ export async function PUT(req: Request) {
     }
 
     const customer = await prisma.customer.update({
-      where: { id },
+      where: {
+        id,
+        organizationId: user.organizationId, // Ensure same org
+      },
       data: {
         name,
         email,
@@ -97,8 +128,18 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.email) {
       return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const user = await getUserWithPermissions(session.user.id);
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 });
+    }
+
+    // Check permission
+    if (!hasPermission(user, 'customers', 'delete')) {
+      return new NextResponse("Forbidden", { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);
@@ -109,7 +150,10 @@ export async function DELETE(req: Request) {
     }
 
     await prisma.customer.delete({
-      where: { id },
+      where: {
+        id,
+        organizationId: user.organizationId,
+      },
     });
 
     return NextResponse.json({ success: true });

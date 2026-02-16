@@ -7,51 +7,127 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Organization {
+  id           String           @id @default(cuid())
+  name         String
+  slug         String           @unique
+  settings     Json?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  users        User[]
+  customers    Customer[]
+  leads        Lead[]
+  tasks        Task[]
+  departments  Department[]
+  roles        Role[]
+  joinRequests OrgJoinRequest[]
+}
+
+model Department {
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users          User[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, name])
+}
+
+model Role {
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  permissions    Json         // Stores permission flags
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users          User[]
+  isSystemRole   Boolean      @default(false) // For built-in roles like Admin, Manager, Member
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, name])
+}
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tasks     Task[]
-  leads     Lead[]
+  id             String    @id @default(cuid())
+  email          String    @unique
+  password       String
+  name           String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  departmentId   String?
+  department     Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  roleId         String?
+  role           Role?        @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  managerId      String?
+  manager        User?        @relation("ManagerSubordinates", fields: [managerId], references: [id], onDelete: SetNull)
+  subordinates   User[]       @relation("ManagerSubordinates")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  tasks          Task[]
+  leads          Lead[]
 }
 
 model Customer {
-  id          String   @id @default(cuid())
-  name        String
-  email       String   @unique
-  phone       String?
-  company     String?
-  status      String   @default("active")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String       @id @default(cuid())
+  name           String
+  email          String
+  phone          String?
+  company        String?
+  status         String       @default("active")
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, email])
 }
 
 model Lead {
-  id          String   @id @default(cuid())
-  name        String
-  email       String
-  phone       String?
-  company     String?
-  status      String   @default("new")
-  source      String?
-  assignedTo  String?
-  user        User?    @relation(fields: [assignedTo], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String       @id @default(cuid())
+  name           String
+  email          String
+  phone          String?
+  company        String?
+  status         String       @default("new")
+  source         String?
+  assignedTo     String?
+  user           User?        @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
 
 model Task {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  status      String   @default("pending")
-  priority    String   @default("medium")
-  dueDate     DateTime?
-  assignedTo  String?
-  user        User?    @relation(fields: [assignedTo], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String       @id @default(cuid())
+  title          String
+  description    String?
+  status         String       @default("pending")
+  priority       String       @default("medium")
+  dueDate        DateTime?
+  assignedTo     String?
+  user           User?        @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model OrgJoinRequest {
+  id             String       @id @default(cuid())
+  email          String
+  name           String?
+  message        String?
+  status         String       @default("pending") // pending, approved, rejected
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  approvedBy     String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, email])
 }

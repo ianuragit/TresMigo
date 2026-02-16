@@ -61,6 +61,28 @@ export default async function RootLayout({
                         >
                           Tasks
                         </Link>
+                        <div className="relative group">
+                          <button className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-500 hover:text-gray-700">
+                            Settings
+                            <svg className="ml-1 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                          <div className="absolute left-0 mt-2 w-48 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 bg-white border rounded-md shadow-lg z-50">
+                            <Link href="/settings/organization" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                              Organization
+                            </Link>
+                            <Link href="/settings/team" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                              Team
+                            </Link>
+                            <Link href="/settings/departments" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                              Departments
+                            </Link>
+                            <Link href="/settings/roles" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                              Roles
+                            </Link>
+                          </div>
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center">
